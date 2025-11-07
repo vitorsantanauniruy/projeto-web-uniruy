@@ -1,16 +1,14 @@
 <?php
+// php/router.php
+session_start();
+require_once 'conexao.php';
 
-session_start(); // Sempre inicie a sessão
-require_once 'conexao.php'; // Inclui a conexão com o BD
-
-// Pega a 'acao' (seja por GET ou POST)
-$acao = $_REQUEST['acao'] ?? 'view'; 
+$acao = $_REQUEST['acao'] ?? 'view'; // 'view' é um padrão seguro
 
 switch ($acao) {
 
     // --- AÇÕES DE AUTENTICAÇÃO ---
     case 'cadastro':
-        // Lógica de cadastro FINAL (com try...catch e redirecionamento)
         $nome = $_POST['name'];
         $sobrenome = $_POST['lastname'];
         $email = $_POST['email'];
@@ -18,23 +16,18 @@ switch ($acao) {
         $confirmaSenha = $_POST['confirmpassword'];
 
         if ($senha !== $confirmaSenha) {
-            // Redireciona de volta com erro
             header("Location: ../cadastro.php?status=erro_senha");
             exit();
         }
-
         $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
 
         try {
             $sql = "INSERT INTO usuarios (nome, sobrenome, email, senha) VALUES (?, ?, ?, ?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$nome, $sobrenome, $email, $senhaHash]);
-            // Sucesso: Redireciona para o login
             header("Location: ../login.php?status=sucesso");
             exit();
-
         } catch (\PDOException $e) {
-            // Erro: (Ex: email duplicado)
             if ($e->getCode() == 23000) {
                  header("Location: ../cadastro.php?status=erro_email");
             } else {
@@ -42,10 +35,9 @@ switch ($acao) {
             }
             exit();
         }
-        break; // Fim do case 'cadastro'
+        break;
 
     case 'login':
-        // Lógica de login FINAL
         $email = $_POST['email'];
         $senha = $_POST['password'];
 
@@ -55,15 +47,11 @@ switch ($acao) {
             $usuario = $stmt->fetch();
 
             if ($usuario && password_verify($senha, $usuario['senha'])) {
-                // Credenciais corretas: Salva na sessão
                 $_SESSION['user_id'] = $usuario['id'];
                 $_SESSION['user_name'] = $usuario['nome'];
-
-                // Redireciona para a página principal
                 header("Location: ../index.php");
                 exit();
             } else {
-                // Credenciais incorretas
                 header("Location: ../login.php?status=erro_login");
                 exit();
             }
@@ -71,20 +59,81 @@ switch ($acao) {
             header("Location: ../login.php?status=erro_generico");
             exit();
         }
-        break; // Fim do case 'login'
+        break;
 
     case 'logout':
-        // Lógica de logout FINAL
         session_unset();
         session_destroy();
         header("Location: ../index.php");
         exit();
-        break; // Fim do case 'logout'
+        break;
 
-    // ... (Seus outros cases de carrinho virão aqui depois)
+    // --- AÇÕES DO CARRINHO ---
+    case 'adicionar_carrinho':
+        $produto_id = (int)($_POST['produto_id'] ?? 0);
+        $quantidade = (int)($_POST['quantidade'] ?? 1);
+
+        if ($produto_id <= 0 || $quantidade <= 0) {
+            // Não faz nada se os dados forem inválidos
+            header("Location: ../produtos.php?status=erro_adicionar");
+            exit();
+        }
+
+        // Inicializa o carrinho na sessão se não existir
+        if (!isset($_SESSION['carrinho'])) {
+            $_SESSION['carrinho'] = [];
+        }
+
+        // Adiciona ou atualiza a quantidade
+        if (isset($_SESSION['carrinho'][$produto_id])) {
+            $_SESSION['carrinho'][$produto_id] += $quantidade;
+        } else {
+            $_SESSION['carrinho'][$produto_id] = $quantidade;
+        }
+        
+        // Redireciona para a página do carrinho
+        header("Location: ../carrinho.php");
+        exit();
+        break;
+
+    case 'remover_carrinho':
+        $produto_id = (int)($_GET['id'] ?? 0);
+
+        if ($produto_id > 0 && isset($_SESSION['carrinho'][$produto_id])) {
+            unset($_SESSION['carrinho'][$produto_id]);
+        }
+        header("Location: ../carrinho.php");
+        exit();
+        break;
+        
+    // --- FINALIZAÇÃO DE PEDIDO ---
+    case 'finalizar_pedido':
+        // 1. Verifique se o usuário está logado
+        if (!isset($_SESSION['user_id'])) {
+             // Salva o destino para redirecionar após o login
+             $_SESSION['destino'] = 'carrinho.php'; 
+             header("Location: ../login.php?status=necessario");
+             exit();
+        }
+        
+        // 2. Verifique se o carrinho não está vazio
+        if (empty($_SESSION['carrinho'])) {
+             header("Location: ../carrinho.php?status=vazio");
+             exit();
+        }
+        
+        /* * LÓGICA DE PEDIDO (Simples)
+         * Em um projeto real, aqui você salvaria o pedido em tabelas
+         * `pedidos` e `itens_pedido` no banco de dados.
+         * Para este projeto, vamos apenas limpar o carrinho e agradecer.
+         */
+        
+        unset($_SESSION['carrinho']);
+        header("Location: ../index.php?status=pedido_sucesso");
+        exit();
+        break;
 
     default:
         // Ação desconhecida, volta para a home
         header("Location: ../index.php");
-        exit();
 }
