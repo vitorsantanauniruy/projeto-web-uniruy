@@ -105,32 +105,85 @@ switch ($acao) {
         header("Location: ../carrinho.php");
         exit();
         break;
-        
-    // --- FINALIZAÇÃO DE PEDIDO ---
+
     case 'finalizar_pedido':
-        // 1. Verifique se o usuário está logado
+        // Verifique se o usuário está logado
         if (!isset($_SESSION['user_id'])) {
-             // Salva o destino para redirecionar após o login
              $_SESSION['destino'] = 'carrinho.php'; 
              header("Location: ../login.php?status=necessario");
              exit();
         }
         
-        // 2. Verifique se o carrinho não está vazio
-        if (empty($_SESSION['carrinho'])) {
+        // Verifique se o carrinho não está vazio
+        $carrinho = $_SESSION['carrinho'] ?? [];
+        if (empty($carrinho)) {
              header("Location: ../carrinho.php?status=vazio");
              exit();
         }
         
-        /* * LÓGICA DE PEDIDO (Simples)
-         * Em um projeto real, aqui você salvaria o pedido em tabelas
-         * `pedidos` e `itens_pedido` no banco de dados.
-         * Para este projeto, vamos apenas limpar o carrinho e agradecer.
-         */
+        // Inicia o "modo de segurança" do banco de dados
+        $pdo->beginTransaction();
+
+        try {
+            //Pegar os detalhes e preços atuais dos produtos do carrinho
+            $ids = implode(',', array_keys($carrinho));
+            $stmt = $pdo->prepare("SELECT id_produto, preco FROM produtos WHERE id_produto IN (" . str_repeat('?,', count(array_keys($carrinho)) - 1) . "?)");
+            $stmt->execute(array_keys($carrinho));
+            $produtos_db = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // Transforma em [id => preco]
+
+            $total_pedido = 0.0;
+            $itens_para_salvar = [];
+
+            foreach ($carrinho as $id_produto => $quantidade) {
+                $preco_unitario = $produtos_db[$id_produto]; // Pega o preço atual do BD
+                $total_pedido += ($preco_unitario * $quantidade);
+                
+                $itens_para_salvar[] = [
+                    'id_produto' => $id_produto,
+                    'quantidade' => $quantidade,
+                    'preco_unitario' => $preco_unitario
+                ];
+            }
+
+            //Salvar o Pedido (Pai) na tabela 'pedidos'
+            $id_usuario = $_SESSION['user_id'];
+            $sql_pedido = "INSERT INTO pedidos (id_usuario, total_pedido) VALUES (?, ?)";
+            $stmt_pedido = $pdo->prepare($sql_pedido);
+            $stmt_pedido->execute([$id_usuario, $total_pedido]);
+            
+            //Pegar o ID do pedido que acabamos de criar
+            $id_pedido_novo = $pdo->lastInsertId();
+
+            //Salvar os Itens do Pedido (Filhos) na tabela 'itens_pedido'
+            $sql_itens = "INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES (?, ?, ?, ?)";
+            $stmt_itens = $pdo->prepare($sql_itens);
+            
+            foreach ($itens_para_salvar as $item) {
+                $stmt_itens->execute([
+                    $id_pedido_novo,
+                    $item['id_produto'],
+                    $item['quantidade'],
+                    $item['preco_unitario']
+                ]);
+            }
+
+            // SUCESSO! Salvar tudo permanentemente
+            $pdo->commit();
+            
+            // Limpar o carrinho e redirecionar
+            unset($_SESSION['carrinho']);
+            header("Location: ../minhas_compras.php?status=sucesso"); // Redireciona para a nova página!
+            exit();
+
+        } catch (\Exception $e) {
+            // FALHA! Desfazer todas as queries
+            $pdo->rollBack();
+            
+            // Redireciona de volta ao carrinho com erro
+            header("Location: ../carrinho.php?status=erro_pedido");
+            exit();
+        }
         
-        unset($_SESSION['carrinho']);
-        header("Location: ../index.php?status=pedido_sucesso");
-        exit();
         break;
 
     default:
