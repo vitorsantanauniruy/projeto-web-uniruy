@@ -145,7 +145,7 @@ switch ($acao) {
                 ];
             }
 
-            //Salvar o Pedido (Pai) na tabela 'pedidos'
+            //Salvar o Pedido na tabela 'pedidos'
             $id_usuario = $_SESSION['user_id'];
             $sql_pedido = "INSERT INTO pedidos (id_usuario, total_pedido) VALUES (?, ?)";
             $stmt_pedido = $pdo->prepare($sql_pedido);
@@ -154,7 +154,7 @@ switch ($acao) {
             //Pegar o ID do pedido que acabamos de criar
             $id_pedido_novo = $pdo->lastInsertId();
 
-            //Salvar os Itens do Pedido (Filhos) na tabela 'itens_pedido'
+            //Salvar os Itens do Pedido na tabela 'itens_pedido'
             $sql_itens = "INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES (?, ?, ?, ?)";
             $stmt_itens = $pdo->prepare($sql_itens);
             
