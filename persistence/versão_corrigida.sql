@@ -32,6 +32,35 @@ CREATE TABLE categorias (
         FOREIGN KEY (id_produto) REFERENCES produtos(id_produto)
 	);
     
+
+	/*
+ * Tabela 1: O Pedido
+ */
+CREATE TABLE pedidos (
+    id_pedido INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_pedido DECIMAL(10, 2) NOT NULL,
+    
+    -- Link para a tabela de usuários
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id)
+);
+
+/*
+ * Tabela 2: Os Itens do Pedido
+ */
+CREATE TABLE itens_pedido (
+    id_item INT PRIMARY KEY AUTO_INCREMENT,
+    id_pedido INT NOT NULL,
+    id_produto INT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(10, 2) NOT NULL,
+    
+    -- Link para a tabela de pedidos
+    FOREIGN KEY (id_pedido) REFERENCES pedidos(id_pedido),
+    -- Link para a tabela de produtos
+    FOREIGN KEY (id_produto) REFERENCES produtos(id_produto)
+);
     
     INSERT INTO categorias (nome) VALUES
 	('Video Games'),
